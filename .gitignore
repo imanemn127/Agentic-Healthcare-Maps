@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+data/*.xlsx
+data/*.csv
+data/*.jsonl
+data/geocode_cache.json
+maps/*.html
+*.egg-info/
+dist/
+build/
+.DS_Store
