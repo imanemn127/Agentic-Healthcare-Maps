@@ -1,0 +1,15 @@
+Project Title: Agentic Healthcare Maps
+Challenge: Challenge 3 — Agentic Healthcare Maps
+Full Name: Imane Moumoun
+User ID: 094d0ebc-768c-41e9-8ae8-91439ea87ad2
+GitHub: https://github.com/imanemn127/Agentic-Healthcare-Maps
+
+---
+
+Agentic Healthcare Maps is an end-to-end AI pipeline that turns raw, messy Indian medical-facility records into a trustworthy, queryable healthcare map — with zero manual curation.
+
+The pipeline runs in five autonomous stages. First, a Gemini/Llama LLM reads each noisy record in batches and extracts structured fields — facility type, bed count, specialties, emergency status — together with verbatim evidence sentences that keep every value traceable. Second, a hybrid trust scorer combines rule-based contradiction checks (e.g. a primary health centre claiming ICU capability) with an LLM consistency validator; records scoring below 0.4 are automatically re-extracted with a corrective prompt, closing the loop without human intervention. Third, a Nominatim geocoder with a four-level address fallback and a persistent cache resolves every facility to coordinates. Fourth, a Folium map renders the facilities colour-coded by trust tier and overlays a grid of medical deserts — areas with no nearby facility. Fifth, a Streamlit dashboard ties everything together with a natural-language query agent (ask "ICU hospital in Maharashtra") that parses intent, filters the dataset, and returns ranked results with evidence.
+
+Built in Python. No database. No manual labels. Fully reproducible with one command.
+
+
