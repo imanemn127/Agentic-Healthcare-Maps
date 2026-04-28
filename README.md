@@ -1,8 +1,8 @@
-# Agentic Healthcare Maps
+# CarePath AI — Agentic Healthcare Maps
 
 **GitHub:** https://github.com/imanemn127/Agentic-Healthcare-Maps
 
-An end-to-end agentic AI pipeline that processes messy Indian medical facility records at scale (tested up to 73 records on free API tier; built to handle 10,000+), extracts structured data using an LLM, scores each record for trustworthiness, and surfaces everything through an interactive map and a natural language query interface.
+An end-to-end agentic AI pipeline that processes messy Indian medical facility records at scale (tested up to 73 records on free API tier; built to handle 10,000+), extracts structured data using an LLM, scores each record for trustworthiness, and surfaces everything through an interactive map and a natural-language query interface — all wrapped in a polished multi-page Streamlit dashboard.
 
 ---
 
@@ -30,18 +30,29 @@ Agentic-Healthcare-Maps/
 ├── requirements.txt
 ├── run_all.py                  # one-click pipeline runner
 ├── generate_dataset.py
+├── app.py                      # Streamlit entry point (multi-page router)
 ├── data/                       # created at runtime (gitignored)
 ├── maps/                       # created at runtime (gitignored)
+├── assets/
+│   └── favicon.png
 ├── src/
 │   ├── schemas.py              # Pydantic data models
 │   ├── extractor.py            # LLM extraction engine
+│   ├── fast_extractor.py       # faster extraction variant
 │   ├── trust_scorer.py         # trust scoring + self-correction
 │   ├── geocode.py              # Nominatim geocoding
 │   ├── query_agent.py          # natural language query engine
-│   ├── map_generator.py        # Folium map builder
-│   └── app.py                  # Streamlit dashboard
-└── submission/
-    └── project_summary.txt
+│   └── map_generator.py        # Folium map builder
+├── pages/
+│   ├── home.py                 # Hero, pipeline diagram, "How the Agent Works"
+│   ├── discover.py             # Interactive map + state coverage bars
+│   ├── search.py               # Natural-language search UI
+│   └── analytics.py            # 6 Altair charts + capability table + data table
+└── utils/
+    ├── __init__.py
+    ├── constants.py            # Design tokens, icon SVG paths, CAP_META, palette
+    ├── styles.py               # CSS builder — navbar, dark/light mode, all components
+    └── ui.py                   # Shared UI primitives, card renderers, data loaders
 ```
 
 ---
@@ -65,7 +76,7 @@ src/geocode.py            [Nominatim, 4-level fallback, persistent cache]
   └─> data/geocoded_facilities.csv
         │
         ├─> src/map_generator.py  →  maps/healthcare_map.html
-        └─> src/app.py            →  Streamlit dashboard
+        └─> app.py                →  Streamlit dashboard
                                        └─> src/query_agent.py
 ```
 
@@ -91,7 +102,7 @@ GROQ_API_KEY=your_groq_key_here
 GEMINI_API_KEY=your_gemini_key_here   # optional fallback
 ```
 
-Run the full pipeline:
+Run the full pipeline then launch the dashboard:
 
 ```bash
 # one command:
@@ -103,7 +114,9 @@ python -m src.extractor
 python -m src.trust_scorer
 python -m src.geocode
 python -m src.map_generator
-streamlit run src/app.py
+
+# launch dashboard:
+streamlit run app.py
 ```
 
 Dashboard opens at http://localhost:8501
@@ -120,7 +133,44 @@ Dashboard opens at http://localhost:8501
 | Geocoder | `python -m src.geocode` | `data/geocoded_facilities.csv` |
 | Map generator | `python -m src.map_generator` | `maps/healthcare_map.html` |
 | Query agent (CLI) | `python src/query_agent.py "ICU hospital in Maharashtra"` | JSON to stdout |
-| Dashboard | `streamlit run src/app.py` | http://localhost:8501 |
+| Dashboard | `streamlit run app.py` | http://localhost:8501 |
+
+---
+
+## Dashboard pages
+
+### Home
+Hero section describing the three-layer agentic pipeline (Ingest → Reason → Surface), live KPI chips (facilities indexed, states covered, geocoded records, high-trust records), and a **"How the Agent Works"** framed card that walks through the three query steps with numbered blue cubes.
+
+### Discover
+Full-width interactive Folium map with trust-tier colour coding and cluster markers. Side panel shows a state-coverage bar chart (top 10 states) and a data-quality breakdown by trust tier with geocoding coverage stats.
+
+### Search
+Natural-language facility search powered by Groq / Llama 3.3. Parses intent into structured filters (state, type, ownership, capabilities), ranks results by trust score + distance, and returns facility cards with evidence sentences. Optional AI insight per result. Supports example queries and CSV/JSON export.
+
+### Analytics
+Filter panel (state, type, trust tier, min score) → overview metrics → AI dataset analysis → six interactive Altair charts:
+
+| Chart | Type |
+|-------|------|
+| Top 15 States by Facility Count | Vertical bar |
+| Trust Tier Distribution | Donut |
+| Top 10 Facility Types | Horizontal bar |
+| Trust Score Distribution | Histogram |
+| Ownership Breakdown | Donut |
+| Capability Coverage by State | Heatmap (state × capability) |
+
+Followed by a capability coverage table and a sortable top-500 dataset table.
+
+---
+
+## UI architecture
+
+The dashboard is built as a **single-entry multi-page Streamlit app** (`app.py`) that routes via `?page=` query params — no `st.navigation()`, so URLs are bookmarkable and the nav state survives page reload.
+
+- **Navbar** — sticky top bar with navy gradient, logo left, tabs right. Active tab is underlined with the accent colour. Built as injected HTML/CSS, not a Streamlit component.
+- **Dark / light mode** — all colour tokens are CSS custom properties. Both `@media (prefers-color-scheme: dark)` and `[data-theme="dark"]` (Streamlit's own class) are handled so the palette flips automatically.
+- **No Streamlit chrome** — sidebar, header bar, deploy button, and footer are all hidden.
 
 ---
 
@@ -130,5 +180,6 @@ Dashboard opens at http://localhost:8501
 - **Data:** Pandas · Pydantic v2 · OpenPyXL
 - **Geocoding:** Geopy / Nominatim
 - **Mapping:** Folium · MarkerCluster
-- **Dashboard:** Streamlit
+- **Charts:** Altair
+- **Dashboard:** Streamlit (multi-page, custom HTML/CSS navbar)
 - **Language:** Python 3.9+
