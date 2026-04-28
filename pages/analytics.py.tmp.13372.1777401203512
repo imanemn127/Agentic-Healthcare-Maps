@@ -1,0 +1,127 @@
+# pages/analytics.py
+import json
+import os
+import pandas as pd
+import streamlit as st
+import altair as alt
+
+from utils.constants import (
+    CAP_META, GREEN, AMBER, RED, MUTED,
+    PRIMARY, PRIMARY_L, ACCENT_D,
+    L_SURFACE, L_BORDER, L_TEXT, L_TEXT2, L_TEXT3,
+)
+from utils.ui import load_data, get_dataset_summary, section
+
+
+# ── Chart helpers (identical to original, kept here so analytics is self-contained)
+
+def _alt_cfg() -> dict:
+    return {
+        "view":   {"stroke": None, "fill": L_SURFACE},
+        "axis":   {
+            "labelFont": "Sora", "titleFont": "Sora",
+            "labelColor": L_TEXT3, "titleColor": L_TEXT3,
+            "gridColor": L_BORDER, "domainColor": L_BORDER,
+            "tickColor": L_BORDER, "labelFontSize": 11, "titleFontSize": 11,
+        },
+        "title":  {"font": "Sora", "color": L_TEXT, "fontSize": 13,
+                   "fontWeight": 600, "anchor": "start"},
+        "legend": {"labelFont": "Sora", "titleFont": "Sora",
+                   "labelColor": L_TEXT2, "titleColor": L_TEXT3, "labelFontSize": 11},
+        "background": L_SURFACE,
+        "padding": {"top": 16, "right": 16, "bottom": 8, "left": 8},
+    }
+
+
+# ── Paste your chart_top_states / chart_trust_tier / chart_facility_types /
+#    chart_trust_histogram / chart_ownership / chart_capability_heatmap
+#    functions here, unchanged from the original script. ───────────────────
+
+
+def render() -> None:
+    inject_css()
+
+    df = load_data()
+    if df.empty:
+        st.warning("No data available. Run the pipeline first.")
+        return
+
+    section("Filters")
+    fc1, fc2, fc3, fc4 = st.columns(4)
+    sel_state = fc1.selectbox("State",      ["All"] + sorted(df["state"].str.title().unique()), key="an_s")
+    sel_type  = fc2.selectbox("Type",       ["All"] + sorted(df["facility_type"].str.title().unique()), key="an_t")
+    sel_tier  = fc3.selectbox("Trust tier", ["All", "high", "medium", "low", "unverified"], key="an_tr")
+    min_trust = fc4.slider("Min trust score", 0.0, 1.0, 0.0, 0.05, key="an_min")
+
+    fdf = df.copy()
+    if sel_state != "All": fdf = fdf[fdf["state"].str.title() == sel_state]
+    if sel_type  != "All": fdf = fdf[fdf["facility_type"].str.title() == sel_type]
+    if sel_tier  != "All": fdf = fdf[fdf["trust_tier"] == sel_tier]
+    if min_trust  > 0:     fdf = fdf[fdf["final_trust_score"] >= min_trust]
+
+    section("Overview")
+    k1, k2, k3, k4, k5 = st.columns(5)
+    avg_b = fdf["beds_count"].mean()
+    k1.metric("Facilities",  f"{len(fdf):,}")
+    k2.metric("States",      fdf["state"].nunique())
+    k3.metric("Geocoded",    f"{int(fdf['latitude'].notna().sum()):,}")
+    k4.metric("High Trust",  f"{int((fdf['trust_tier'] == 'high').sum()):,}")
+    k5.metric("Avg Beds",    f"{avg_b:.0f}" if not pd.isna(avg_b) else "—")
+
+    section("AI Dataset Analysis")
+    stats = {
+        "total":          len(fdf),
+        "states":         fdf["state"].nunique(),
+        "high_trust_pct": round((fdf["trust_tier"] == "high").mean() * 100, 1),
+        "geocoded_pct":   round(fdf["latitude"].notna().mean() * 100, 1),
+        "avg_beds":       round(avg_b, 0) if not pd.isna(avg_b) else None,
+        "types":          fdf["facility_type"].value_counts().head(5).to_dict(),
+        "top_states":     fdf["state"].value_counts().head(5).to_dict(),
+    }
+    with st.spinner("Generating analysis…"):
+        summary = get_dataset_summary(json.dumps(stats, default=str))
+    if summary:
+        st.markdown(
+            f'<div class="insight-block">'
+            f'<div class="insight-label">AI Analysis</div>'
+            f'<div class="insight-text">{summary}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    elif not os.getenv("GROQ_API_KEY"):
+        st.caption("Set GROQ_API_KEY in .env to enable AI dataset analysis.")
+
+    section("Visualisations")
+    # ── Paste your chart calls here exactly as in the original render_analytics ──
+    # c1, c2 = st.columns(...)
+    # st.altair_chart(chart_top_states(fdf), ...)
+    # ...
+
+    section("Capability Coverage")
+    existing = [c for c in CAP_META if c in fdf.columns]
+    if existing:
+        total = len(fdf)
+        rows  = []
+        for col in existing:
+            yes_cnt = int((fdf[col] == True).sum())
+            no_cnt  = int((fdf[col] == False).sum())
+            unk_cnt = total - yes_cnt - no_cnt
+            rows.append({
+                "Capability": CAP_META[col],
+                "Yes":        yes_cnt,
+                "No":         no_cnt,
+                "Unknown":    unk_cnt,
+                "Coverage":   f"{yes_cnt/total:.0%}" if total else "—",
+            })
+        st.dataframe(pd.DataFrame(rows).set_index("Capability"), use_container_width=True)
+
+    section("Dataset Table (top 500)")
+    show_cols = [c for c in [
+        "facility_name", "facility_type", "city", "state",
+        "final_trust_score", "trust_tier", "has_icu", "has_emergency_trauma",
+        "beds_count", "ownership", "latitude", "longitude",
+    ] if c in fdf.columns]
+    st.dataframe(
+        fdf[show_cols].sort_values("final_trust_score", ascending=False).head(500),
+        use_container_width=True,
+    )
